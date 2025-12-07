@@ -5,14 +5,18 @@ const lancedb = require('@lancedb/lancedb');
 const fs = require('fs');
 const path = require('path');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const textToSpeech = require('@google-cloud/text-to-speech');
+const util = require('util');
 
 const app = express();
 const PORT = 3001;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY; // Read from environment
+const AUDIO_DIR = path.join(__dirname, 'data', 'audio');
 
 // --- Middleware ---
 app.use(cors());
 app.use(express.json());
+app.use('/api/audio', express.static(AUDIO_DIR)); // Serve audio files statically
 
 // --- Database Setup ---
 const DB_DIR = 'data/lancedb';
@@ -24,6 +28,10 @@ async function initDB() {
     if (!fs.existsSync(DB_DIR)) {
         fs.mkdirSync(DB_DIR, { recursive: true });
     }
+    // Ensure audio directory exists
+    if (!fs.existsSync(AUDIO_DIR)) {
+        fs.mkdirSync(AUDIO_DIR, { recursive: true });
+    }
 
     db = await lancedb.connect(DB_DIR);
 
@@ -32,8 +40,7 @@ async function initDB() {
     if (tableNames.includes('projects')) {
         projectsTable = await db.openTable('projects');
     } else {
-        // Initial schema implied by the first insertion
-        // We will store projects in LanceDB as well for persistence
+        // Initial schema
         projectsTable = await db.createTable('projects', [
             {
                 id: '00000000-0000-0000-0000-000000000000',
@@ -41,9 +48,10 @@ async function initDB() {
                 framework: 'None',
                 sourceContext: '',
                 generatedContent: '',
+                audioUrl: '', // New field for audio URL
                 createdAt: new Date().toISOString(),
                 status: 'Init',
-                vector: Array(384).fill(0) // 384 dim for all-MiniLM-L6-v2 placeholder
+                vector: Array(384).fill(0)
             }
         ]);
         await projectsTable.delete('id = "00000000-0000-0000-0000-000000000000"');
@@ -60,9 +68,7 @@ function isValidUUID(id) {
 }
 
 // --- Embedding Utility (Mock for now) ---
-// In a real scenario, use @xenova/transformers or OpenAI API
 async function generateEmbedding(text) {
-    // Return a random 384-dimensional vector
     return Array.from({ length: 384 }, () => Math.random());
 }
 
@@ -92,9 +98,9 @@ async function generateContent(framework, context, prompt) {
         }
     }
 
-    // Mock Generation if no key provided
+    // Mock Generation
     console.log("Using Synthetic Mock Generation");
-    await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate delay
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
     if (framework === 'PROJECT_DEEPDIVE') {
         return `# Executive Summary\n\nBased on the provided context, the following analysis... \n\n## Key Findings\n\n1. Point A\n2. Point B\n\n## Detailed Analysis\n\n[Synthetic Content generated for ${context.substring(0, 20)}...]`;
@@ -105,15 +111,41 @@ async function generateContent(framework, context, prompt) {
     }
 }
 
+// --- Text-to-Speech Service ---
+async function generateAudio(text, filename) {
+    // Check for Google Cloud Credentials
+    if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+        try {
+            const client = new textToSpeech.TextToSpeechClient();
+            const request = {
+                input: { text: text },
+                voice: { languageCode: 'en-US', ssmlGender: 'NEUTRAL' },
+                audioConfig: { audioEncoding: 'MP3' },
+            };
+            const [response] = await client.synthesizeSpeech(request);
+            const writeFile = util.promisify(fs.writeFile);
+            await writeFile(path.join(AUDIO_DIR, filename), response.audioContent, 'binary');
+            return `/api/audio/${filename}`;
+        } catch (error) {
+            console.error('GCP TTS Error:', error);
+            console.log('Falling back to placeholder audio.');
+        }
+    }
+
+    // Fallback: Return placeholder
+    // Ensure placeholder exists (downloaded in setup) or serve it.
+    // In this plan step we downloaded it to backend/data/audio/placeholder.mp3
+    return `/api/audio/placeholder.mp3`;
+}
+
 
 // --- API Routes for Projects ---
 
-// GET /api/projects - Retrieve all projects
+// GET /api/projects
 app.get('/api/projects', async (req, res) => {
     try {
         if (!projectsTable) return res.status(503).json({ error: 'Database not ready' });
         const projects = await projectsTable.query().limit(100).toArray();
-        // Remove vector field from response to save bandwidth
         const cleanProjects = projects.map(({ vector, ...rest }) => rest);
         res.json(cleanProjects);
     } catch (e) {
@@ -122,7 +154,7 @@ app.get('/api/projects', async (req, res) => {
     }
 });
 
-// POST /api/projects - Create a new project
+// POST /api/projects
 app.post('/api/projects', async (req, res) => {
     const { name, framework } = req.body;
     if (!name || !framework) {
@@ -135,9 +167,10 @@ app.post('/api/projects', async (req, res) => {
         framework,
         sourceContext: '',
         generatedContent: '',
+        audioUrl: '',
         createdAt: new Date().toISOString(),
         status: 'New',
-        vector: await generateEmbedding('') // Empty context embedding
+        vector: await generateEmbedding('')
     };
 
     try {
@@ -151,16 +184,12 @@ app.post('/api/projects', async (req, res) => {
     }
 });
 
-// GET /api/projects/:id - Retrieve a single project
+// GET /api/projects/:id
 app.get('/api/projects/:id', async (req, res) => {
-    if (!isValidUUID(req.params.id)) {
-        return res.status(400).json({ error: 'Invalid Project ID' });
-    }
+    if (!isValidUUID(req.params.id)) return res.status(400).json({ error: 'Invalid Project ID' });
     try {
         const results = await projectsTable.query().where(`id = '${req.params.id}'`).limit(1).toArray();
-        if (results.length === 0) {
-            return res.status(404).json({ error: 'Project not found.' });
-        }
+        if (results.length === 0) return res.status(404).json({ error: 'Project not found.' });
         const { vector, ...project } = results[0];
         res.json(project);
     } catch (e) {
@@ -169,41 +198,29 @@ app.get('/api/projects/:id', async (req, res) => {
     }
 });
 
-// PUT /api/projects/:id - Update a project
+// PUT /api/projects/:id
 app.put('/api/projects/:id', async (req, res) => {
-    if (!isValidUUID(req.params.id)) {
-        return res.status(400).json({ error: 'Invalid Project ID' });
-    }
+    if (!isValidUUID(req.params.id)) return res.status(400).json({ error: 'Invalid Project ID' });
     try {
         const results = await projectsTable.query().where(`id = '${req.params.id}'`).limit(1).toArray();
-        if (results.length === 0) {
-            return res.status(404).json({ error: 'Project not found.' });
-        }
+        if (results.length === 0) return res.status(404).json({ error: 'Project not found.' });
         const originalProject = results[0];
 
         const updatedFields = { ...req.body };
-        delete updatedFields.id; // Prevent ID change
-        delete updatedFields.vector; // Prevent direct vector update
+        delete updatedFields.id;
+        delete updatedFields.vector;
 
-        // Ensure we preserve existing fields if not updated
-        const updatedProject = {
-            ...originalProject,
-            ...updatedFields
-        };
+        const updatedProject = { ...originalProject, ...updatedFields };
 
-        // If sourceContext changed, regenerate embedding
         if (updatedFields.sourceContext !== undefined && updatedFields.sourceContext !== originalProject.sourceContext) {
             console.log('Regenerating embedding for project:', originalProject.id);
             updatedProject.vector = await generateEmbedding(updatedFields.sourceContext);
         }
 
-        // Ensure vector is a plain array to satisfy LanceDB schema strictness
         if (updatedProject.vector && !Array.isArray(updatedProject.vector)) {
             updatedProject.vector = Array.from(updatedProject.vector);
         }
 
-        // LanceDB doesn't support direct update yet efficiently for single rows in this version without overwriting or deletion
-        // Strategy: Delete and Re-insert
         await projectsTable.delete(`id = '${req.params.id}'`);
         await projectsTable.add([updatedProject]);
 
@@ -216,56 +233,76 @@ app.put('/api/projects/:id', async (req, res) => {
     }
 });
 
-// POST /api/generate - Trigger AI Generation
+// POST /api/generate
 app.post('/api/generate', async (req, res) => {
     const { projectId, prompt } = req.body;
-    if (!isValidUUID(projectId)) {
-        return res.status(400).json({ error: 'Invalid Project ID' });
-    }
+    if (!isValidUUID(projectId)) return res.status(400).json({ error: 'Invalid Project ID' });
     console.log(`Generating for project: ${projectId}`);
 
     try {
         const results = await projectsTable.query().where(`id = '${projectId}'`).limit(1).toArray();
-        if (results.length === 0) {
-            console.log('Project not found');
-            return res.status(404).json({ error: 'Project not found' });
-        }
+        if (results.length === 0) return res.status(404).json({ error: 'Project not found' });
 
         const project = results[0];
-        console.log('Project found, generating content...');
         const generatedText = await generateContent(project.framework, project.sourceContext, prompt || 'Analyze this.');
-        console.log('Content generated, updating DB...');
 
-        // Update project with generated content
         const updatedProject = { ...project, generatedContent: generatedText, status: 'Generated' };
 
-        // Ensure vector is a plain array
         if (updatedProject.vector && !Array.isArray(updatedProject.vector)) {
             updatedProject.vector = Array.from(updatedProject.vector);
         }
 
-        await projectsTable.delete(`id = "${projectId}"`); // Changed quotes just in case
+        await projectsTable.delete(`id = "${projectId}"`);
         await projectsTable.add([updatedProject]);
-        console.log('DB Updated');
 
         const { vector, ...cleanProject } = updatedProject;
         res.json(cleanProject);
 
     } catch (e) {
-        console.log('Generation Error:', e); // Use log instead of error to ensure it hits stdout
+        console.log('Generation Error:', e);
         res.status(500).json({ error: 'Generation failed', details: e.toString() });
     }
 });
 
+// POST /api/generate-audio
+app.post('/api/generate-audio', async (req, res) => {
+    const { projectId } = req.body;
+    if (!isValidUUID(projectId)) return res.status(400).json({ error: 'Invalid Project ID' });
 
-// DELETE /api/projects/:id - Delete a project
-app.delete('/api/projects/:id', async (req, res) => {
-    if (!isValidUUID(req.params.id)) {
-        return res.status(400).json({ error: 'Invalid Project ID' });
+    try {
+        const results = await projectsTable.query().where(`id = '${projectId}'`).limit(1).toArray();
+        if (results.length === 0) return res.status(404).json({ error: 'Project not found' });
+
+        const project = results[0];
+        if (!project.generatedContent) return res.status(400).json({ error: 'No content to synthesize' });
+
+        console.log(`Synthesizing audio for project: ${projectId}`);
+        const filename = `${projectId}.mp3`;
+        const audioUrl = await generateAudio(project.generatedContent, filename);
+
+        const updatedProject = { ...project, audioUrl: audioUrl };
+
+        if (updatedProject.vector && !Array.isArray(updatedProject.vector)) {
+            updatedProject.vector = Array.from(updatedProject.vector);
+        }
+
+        await projectsTable.delete(`id = "${projectId}"`);
+        await projectsTable.add([updatedProject]);
+
+        const { vector, ...cleanProject } = updatedProject;
+        res.json(cleanProject);
+
+    } catch (e) {
+        console.log('Audio Generation Error:', e);
+        res.status(500).json({ error: 'Audio generation failed', details: e.toString() });
     }
+});
+
+// DELETE /api/projects/:id
+app.delete('/api/projects/:id', async (req, res) => {
+    if (!isValidUUID(req.params.id)) return res.status(400).json({ error: 'Invalid Project ID' });
     try {
         await projectsTable.delete(`id = '${req.params.id}'`);
-        console.log('Project Deleted:', req.params.id);
         res.status(204).send();
     } catch (e) {
         console.error(e);
@@ -273,8 +310,7 @@ app.delete('/api/projects/:id', async (req, res) => {
     }
 });
 
-
-// --- Server Status and Startup ---
+// --- Status ---
 app.get('/api/status', async (req, res) => {
     const count = await projectsTable.countRows();
     res.json({ status: 'Backend is running', projectCount: count });
