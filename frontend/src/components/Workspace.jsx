@@ -3,19 +3,20 @@ import DeepdiveLayout from './layouts/DeepdiveLayout';
 import SyntheticLayout from './layouts/SyntheticLayout';
 import BenchmarkLayout from './layouts/BenchmarkLayout';
 
-const Workspace = ({ project }) => {
+const Workspace = ({ project, onUpdate, onGenerate }) => {
     if (!project) {
         return <div className="empty-state"><h2>Select a project or create a new one to begin.</h2></div>;
     }
 
     const renderLayout = () => {
+        const layoutProps = { project, onUpdate };
         switch (project.framework) {
             case 'PROJECT_DEEPDIVE':
-                return <DeepdiveLayout project={project} />;
+                return <DeepdiveLayout {...layoutProps} />;
             case 'PROJECT_SYNTHETIC':
-                return <SyntheticLayout project={project} />;
+                return <SyntheticLayout {...layoutProps} />;
             case 'PROJECT_BENCHMARK':
-                return <BenchmarkLayout project={project} />;
+                return <BenchmarkLayout {...layoutProps} />;
             default:
                 return <div>Unknown project framework.</div>;
         }
@@ -25,6 +26,9 @@ const Workspace = ({ project }) => {
         <div className="workspace">
             <div className="workspace-header">
                 <h2>{project.name}</h2>
+                <button className="generate-btn" onClick={onGenerate}>
+                    Initiate Generation (Keystone: SPARK)
+                </button>
             </div>
             <div className="project-details">
                 <p><strong>ID:</strong> {project.id}</p>
