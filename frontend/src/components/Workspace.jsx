@@ -1,12 +1,20 @@
-import React from 'react';
+import React, { useState } from 'react';
 import DeepdiveLayout from './layouts/DeepdiveLayout';
 import SyntheticLayout from './layouts/SyntheticLayout';
 import BenchmarkLayout from './layouts/BenchmarkLayout';
 
 const Workspace = ({ project, onUpdate, onGenerate }) => {
+    const [isGenerating, setIsGenerating] = useState(false);
+
     if (!project) {
         return <div className="empty-state"><h2>Select a project or create a new one to begin.</h2></div>;
     }
+
+    const handleGenerateClick = async () => {
+        setIsGenerating(true);
+        await onGenerate();
+        setIsGenerating(false);
+    };
 
     const renderLayout = () => {
         const layoutProps = { project, onUpdate };
@@ -26,8 +34,12 @@ const Workspace = ({ project, onUpdate, onGenerate }) => {
         <div className="workspace">
             <div className="workspace-header">
                 <h2>{project.name}</h2>
-                <button className="generate-btn" onClick={onGenerate}>
-                    Initiate Generation (Keystone: SPARK)
+                <button
+                    className={`generate-btn ${isGenerating ? 'generating' : ''}`}
+                    onClick={handleGenerateClick}
+                    disabled={isGenerating}
+                >
+                    {isGenerating ? 'Analyzing...' : 'Initiate Generation (Keystone: SPARK)'}
                 </button>
             </div>
             <div className="project-details">

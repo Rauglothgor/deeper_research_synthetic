@@ -1,48 +1,51 @@
-# Deeper Research Synthetic
+# Deeper Research Synthetic - Build Guide
 
-## The Mission: An Iron-Clad Understanding for a Complex World
+## Overview
+This repository contains the implementation of the **Deeper Research Synthetic** ecosystem, an agentic tool for generating high-quality, framework-based analysis.
 
-This repository is the foundation for a paradigm-shifting project: an agentic, self-sustaining ecosystem for generating and disseminating deep, unbiased understanding of critical global issues. Our mission is to combat the flood of low-effort, ambiguous "AI slop" by producing iron-clad, respected analysis that helps people comprehend the complex situations unfolding on our planet, the interconnectedness of events, and their profound human impact.
+## Architecture
+- **Frontend**: React (Vite)
+- **Backend**: Node.js (Express)
+- **Database**: LanceDB (Embedded Vector Database)
+- **AI**: Gemini API (with Mock Fallback)
 
-We are building more than a content engine; we are building a new model for global consciousness.
+## Prerequisites
+- Node.js (v18+)
+- npm
 
-## The Philosophy: AI as a Force Multiplier
+## Quick Start
+To start the entire application (Backend + Frontend) in development mode:
 
-This project is a statement against the outsourcing of thought. We believe AI's true potential lies not in replacing human intellect, but in amplifying it. Our methodology is built on a "force multiplier" principle, using a layered, multi-tool approach that requires human guidance, curiosity, and expertise at every stage.
+1.  **Install Dependencies**:
+    ```bash
+    npm install
+    ```
 
-**Process as a Product:** We embrace transparency. A core feature of our work is the "scratchpad framework," which allows users to see *how* the AI agent deconstructs and rebuilds ideas. By revealing the logic, we transform the content into a learning tool, offering a unique external perspective on complex problems.
+2.  **Start Application**:
+    ```bash
+    npm start
+    ```
 
-## The Three Pillars of Content
+    - Backend runs on: `http://localhost:3001`
+    - Frontend runs on: `http://localhost:5173`
 
-The project's output is channeled through three distinct, high-effort frameworks:
+3.  **Access the App**:
+    Open your browser to `http://localhost:5173`.
 
-1.  **The Deeper Research Framework:** Produces exhaustive, academic-style white papers (10,000+ words) for deep, evidence-based analysis.
-    *   **Example:** *A Military History of the 17th Airborne Division.*
+## Configuration
+- **Gemini API Key**: To use the real Gemini API, create a `.env` file in `backend/` and add:
+  ```
+  GEMINI_API_KEY=your_api_key_here
+  ```
+  If no key is provided, the system defaults to a **Synthetic Mock Generator** for testing purposes.
 
-2.  **The Podcast Synthetic Framework:** Creates compelling, narrative-driven podcast episodes (15,000+ words), transforming dense information and existing media into engaging audio-first analyses.
-    *   **Example:** *The Hunger Algorithm: Gaza and the Ghost of Humanitarian Aid.*
+## Key Features
+- **Project Management**: Create projects with specific frameworks (Deepdive, Synthetic, Benchmark).
+- **Source Context**: Input raw data/text which is vectorized and stored in LanceDB.
+- **AI Generation**: Generate structured analysis based on context and framework.
+- **Vector Search**: (Backend) Context is embedded using a 384-dimensional model (placeholder or Xenova/transformers).
 
-3.  **The Human Condition Benchmark (HCB) Framework:** Generates data-driven, infographic-rich dashboards that provide a snapshot of global crises using a DEFCON-style risk assessment.
-    *   **Example:** *Human Condition Report: August 1, 2025.*
-
-## The Vision: A Multi-Channel Ecosystem
-
-Our goal is to create a self-sustaining media ecosystem. The public-facing dashboard is the central hub, but the content is designed for wide distribution across multiple formats to reach the largest possible audience:
-
-*   **Long-Form Text:** Full reports and transcripts for deep reading.
-*   **Audio:** Professionally produced podcast episodes and audiobooks distributed via RSS to all major podcasting platforms.
-*   **Dynamic Infographics:** Shareable, high-impact visuals that distill key findings for broader engagement.
-
-This project will serve as a data-rich showcase into the world we all inhabit, directing users to the original source content while providing a powerful analytical layer on top of it.
-
-## The Path Forward
-
-This project is currently in its foundational stage. The core frameworks have been defined and tested. The next phases of development will focus on building out the agentic system and public-facing platform in a phased approach. The high-level plan is as follows:
-
-*   **Phase 1: Foundation & Validation (Week 1):** Establish the project's foundational infrastructure and validate the core concepts.
-*   **Phase 2: Core Development (Weeks 2-3):** Build the core functionality of the application, including the project creation and source context management features.
-*   **Phase 3: Integration & Testing (Weeks 4-5):** Integrate the AI generation capabilities and thoroughly test the application.
-*   **Phase 4: Launch Preparation (Week 6):** Prepare the application for launch.
-*   **Phase 5: Launch & Iteration (Ongoing):** Launch the application and iterate based on user feedback.
-
-A more detailed breakdown of the build plan can be found in the `Project-phased-build-contract.md` file.
+## Project Structure
+- `backend/`: Server logic, API endpoints, LanceDB data (`backend/data`).
+- `frontend/`: React application components and layouts.
+- `Project-phased-build-contract.md`: Development roadmap and status.

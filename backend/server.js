@@ -54,6 +54,11 @@ async function initDB() {
 initDB().catch(console.error);
 
 
+// --- Helper Functions ---
+function isValidUUID(id) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+}
+
 // --- Embedding Utility (Mock for now) ---
 // In a real scenario, use @xenova/transformers or OpenAI API
 async function generateEmbedding(text) {
@@ -148,6 +153,9 @@ app.post('/api/projects', async (req, res) => {
 
 // GET /api/projects/:id - Retrieve a single project
 app.get('/api/projects/:id', async (req, res) => {
+    if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid Project ID' });
+    }
     try {
         const results = await projectsTable.query().where(`id = '${req.params.id}'`).limit(1).toArray();
         if (results.length === 0) {
@@ -163,6 +171,9 @@ app.get('/api/projects/:id', async (req, res) => {
 
 // PUT /api/projects/:id - Update a project
 app.put('/api/projects/:id', async (req, res) => {
+    if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid Project ID' });
+    }
     try {
         const results = await projectsTable.query().where(`id = '${req.params.id}'`).limit(1).toArray();
         if (results.length === 0) {
@@ -208,6 +219,9 @@ app.put('/api/projects/:id', async (req, res) => {
 // POST /api/generate - Trigger AI Generation
 app.post('/api/generate', async (req, res) => {
     const { projectId, prompt } = req.body;
+    if (!isValidUUID(projectId)) {
+        return res.status(400).json({ error: 'Invalid Project ID' });
+    }
     console.log(`Generating for project: ${projectId}`);
 
     try {
@@ -246,6 +260,9 @@ app.post('/api/generate', async (req, res) => {
 
 // DELETE /api/projects/:id - Delete a project
 app.delete('/api/projects/:id', async (req, res) => {
+    if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid Project ID' });
+    }
     try {
         await projectsTable.delete(`id = '${req.params.id}'`);
         console.log('Project Deleted:', req.params.id);
